@@ -1,0 +1,39 @@
+[core]
+	editor = vim
+#	pager = "{ [ $COLUMNS -lt 160 ] && delta || delta --side-by-side -w ${FZF_PREVIEW_COLUMNS:-$COLUMNS}; }"
+pager = "{ \
+		COLUMNS=$(tput cols); \
+		if [ $COLUMNS -ge 80 ] && [ -z $FZF_PREVIEW_COLUMNS ]; then \
+			delta --side-by-side -w $COLUMNS; \
+		elif [ $COLUMNS -ge 160 ] && [ ! -z $FZF_PREVIEW_COLUMNS ]; then \
+			delta --side-by-side -w $FZF_PREVIEW_COLUMNS; \
+		else \
+			delta; \
+		fi \
+}"
+
+[user]
+	name = Alexey
+	email = alexey@alpha
+
+[push]
+	default = simple
+
+#[pager]
+#    diff = delta
+#    log = delta
+#    reflog = delta
+#    show = delta
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+#		features = side-by-side line-numbers decorations
+		features = line-numbers decorations
+		whitespace-error-style = 22 reverse
+
+[delta "decorations"]
+    commit-decoration-style = bold yellow ul
+    file-style = bold yellow ul
+    file-decoration-style = none

@@ -1,0 +1,204 @@
+#!/bin/bash
+
+alias ff=firefox
+alias lt='ls -ltr'
+alias lr='fd -t f | xargs ls -ltr'
+alias hh=history
+alias cc=clipcopy
+alias bs='bat -p --pager "less -RF"'
+
+ppath() {
+  export PATH="$*:$PATH"
+}
+
+lpath() {
+  export LD_LIBRARY_PATH="$*:$LD_LIBRARY_PATH"
+}
+
+mkcd() {
+  local dir="$*"
+  mkdir "$dir" && cd "$dir"
+}
+
+mkcb() {
+  mkcd cmake-build
+}
+
+sst() {
+  ssh "$@" -X -t "tmux attach-session -t $LOGNAME || tmux new -s $LOGNAME"
+}
+
+rr() {
+  ranger --choosedir=$HOME/.rangerdir "$*"
+  LASTDIR=$(cat $HOME/.rangerdir)
+  cd "$LASTDIR" || exit
+}
+
+lf () {
+  local res="$(locate "$*" | FZF_DEFAULT_OPTS="--height ${FZF_TMUX_HEIGHT:-40%} --reverse $FZF_DEFAULT_OPTS" $(__fzfcmd) +m)"
+  if [[ -f "$res" ]]; then
+    vim "$res"
+  elif [[ -d "$res" ]]; then
+    cd "$res"
+  fi
+}
+
+print_pwd() {
+  echo " 
+${fg[cyan]}$PWD$reset_color"
+  zle redisplay
+}
+
+zle     -N     print_pwd
+bindkey '^[^M' print_pwd
+
+PREVPWD=none
+MYPROMPT=' %(?:%{$fg_bold[green]%}➜ :%{$fg_bold[red]%}➜ )%{$reset_color%}$(git_prompt_info)'
+MYPWD=' %{$fg[cyan]%}%~%{$reset_color%}'
+
+my_precmd() {
+  if [ "$PWD" = "$PREVPWD" ]; then
+    export PROMPT="$MYPROMPT"
+  else
+    export PROMPT="${MYPWD}
+${MYPROMPT}"
+    PREVPWD="$PWD"
+fi
+}
+
+autoload -U add-zsh-hook
+add-zsh-hook precmd my_precmd
+
+trim_hist_file() {
+  local curfile="$*"
+  local tmpfile="$curfile.tmp"
+  if [ -e "$curfile" ]; then
+    tail -1000 "$curfile" | uniq > "$tmpfile"
+    mv "$tmpfile" "$curfile"
+  fi
+}
+
+GDIRHIST="$HOME/.global_dir_history"
+
+my_zshexit() {
+  # delete lines which ends with ~
+  dirs -p | grep -v "~$" >> "$GDIRHIST"
+  trim_hist_file "$GDIRHIST"
+}
+
+add-zsh-hook zshexit my_zshexit
+
+fzf-select-dir-widget() {
+  local cmd=$*
+  setopt localoptions pipefail no_aliases 2> /dev/null
+  local dir="$(eval "$cmd" | FZF_DEFAULT_OPTS="--height ${FZF_TMUX_HEIGHT:-40%} --reverse $FZF_DEFAULT_OPTS" $(__fzfcmd) +m)"
+  if [[ -z "$dir" ]]; then
+    zle redisplay
+    return 0
+  fi
+  zle push-line # Clear buffer. Auto-restored on next prompt.
+  #BUFFER="cd ${dir/\~/$HOME}"
+  BUFFER="cd ${dir}"
+  zle accept-line
+  local ret=$?
+  unset dir # ensure this doesn't end up appearing in prompt expansion
+  zle reset-prompt
+  return $ret
+}
+
+fzf-global-dirhistory-widget() {
+  local cmd="tac $GDIRHIST"
+  fzf-select-dir-widget "$cmd"
+  local ret=$?
+  return $ret
+}
+zle     -N    fzf-global-dirhistory-widget
+bindkey '\ez' fzf-global-dirhistory-widget
+
+zh() {
+  local dir
+  #dir=$(d -lR | fzf +m) && cd "${dir/\~/$HOME}"
+  dir=$(d -lR | fzf +m) && cd "${dir}"
+}
+
+fzf-zhistory-widget() {
+  local cmd="fasd -dlR 2> /dev/null"
+  fzf-select-dir-widget "$cmd"
+  local ret=$?
+  return $ret
+}
+zle     -N   fzf-zhistory-widget
+bindkey '^z' fzf-zhistory-widget
+
+dh() {
+  local dir
+  #dir=$(dirs -p | fzf +m) && cd "${dir/\~/$HOME}"
+  dir=$(dirs -p | fzf +m) && cd "${dir}"
+}
+
+fzf-session-dirhistory-widget() {
+  local cmd="dirs -p 2> /dev/null"
+  fzf-select-dir-widget "$cmd"
+  local ret=$?
+  return $ret
+}
+zle     -N    fzf-session-dirhistory-widget
+bindkey '\eh' fzf-session-dirhistory-widget
+
+fzf-local-cd-widget() {
+  local cmd="fd -t d -d 1 -IL 2> /dev/null | sort"
+  fzf-select-dir-widget "$cmd"
+  local ret=$?
+  return $ret
+}
+zle     -N    fzf-local-cd-widget
+bindkey '\en' fzf-local-cd-widget
+
+bindkey "\ep" dirhistory_zle_dirhistory_up
+bindkey "\ej" dirhistory_zle_dirhistory_back
+bindkey "\ek" dirhistory_zle_dirhistory_future
+
+my-global-history-widget() {
+  if [[ $_per_directory_history_is_global == false ]]; then
+    _per-directory-history-set-global-history
+    _per_directory_history_is_global=true
+    fzf-history-widget
+    _per-directory-history-set-directory-history
+    _per_directory_history_is_global=false
+  fi
+}
+zle     -N    my-global-history-widget
+bindkey '^g'  my-global-history-widget
+
+fzf-last-word-widget() {
+  histlist=$(
+    hist=("${(@f)$(fc -lr 1)}")
+    for item in $hist; do
+      words=(${(z)item})
+      count=${#words[@]}
+      for (( pos = 3; pos <= count; pos++ )); do
+        print -- "${words[1]}\t$pos\t${words[pos]}";
+      done
+    done
+  )
+  local RECALL_ARGUMENT
+  RECALL_ARGUMENT=$(print "$histlist" | sort -uk3 | sort -n -k1 -k2 | cut -f3- | fzf --tac -e)
+  if [[ -n $RECALL_ARGUMENT ]]; then
+    LBUFFER="${LBUFFER}${RECALL_ARGUMENT}"
+    zle redisplay
+  fi
+}
+zle -N        fzf-last-word-widget 
+bindkey '^s'  fzf-last-word-widget
+
+fzf-global-last-word-widget() {
+  if [[ $_per_directory_history_is_global == false ]]; then
+    _per-directory-history-set-global-history
+    _per_directory_history_is_global=true
+    fzf-last-word-widget
+    _per-directory-history-set-directory-history
+    _per_directory_history_is_global=false
+  fi
+}
+zle -N        fzf-global-last-word-widget 
+bindkey '^x'  fzf-global-last-word-widget

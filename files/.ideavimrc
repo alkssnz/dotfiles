@@ -1,0 +1,29 @@
+set ai
+
+"inoremap <C-j> <Down>
+"inoremap <C-k> <Up>
+inoremap <C-b> <Left>
+inoremap <C-f> <Right>
+
+execute "set <A-b>=\eb"
+inoremap <A-b> <C-o>b
+execute "set <A-f>=\ef"
+inoremap <A-f> <C-o>w
+
+"inoremap <C-h> <C-o>X
+"inoremap <C-d> <C-o>x
+"inoremap <C-h> <Left><Del>
+inoremap <C-d> <Del>
+
+"inoremap <C-w> <C-o>db
+execute "set <A-d>=\ed"
+inoremap <A-d> <C-o>dw
+
+inoremap <C-a> <C-o>^
+inoremap <C-e> <C-o>$<Right>
+"inoremap <C-u> <C-o>d^
+inoremap <C-l> <C-o>D<Right>
+
+noremap <C-w><C-w> :bd<cr>
+
+set ideajoin
